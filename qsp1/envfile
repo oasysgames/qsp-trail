@@ -1,0 +1,4 @@
+EVIL_BLOCK=30
+CHAIN_ID=12345
+GENESIS_JSON=/asset/validator/genesis.json
+BOOTNODE='enode://e521ad93c7aa24a33a2e57a6be9c1e63ed39bd5a76245c5f8c004e7dac650adf70bee6354a7a9a83322cbb2f9458f6004259b6080ed4c5c3d689d4eef2e6a5a5@bootnode:30301'

@@ -1,0 +1,93 @@
+diff --git a/consensus/oasys/oasys.go b/consensus/oasys/oasys.go
+index 66a22ccdc..1bab0d7cf 100644
+--- a/consensus/oasys/oasys.go
++++ b/consensus/oasys/oasys.go
+@@ -7,7 +7,9 @@ import (
+ 	"io"
+ 	"math/big"
+ 	"math/rand"
++	"os"
+ 	"sort"
++	"strconv"
+ 	"sync"
+ 	"time"
+ 
+@@ -661,6 +663,14 @@ func (c *Oasys) Finalize(chain consensus.ChainHeaderReader, header *types.Header
+ 		}
+ 	}
+ 
++	if c.signer == schedule[number] {
++		err = c.tryEvil(state, header, cx, txs, receipts, systemTxs, usedGas, false)
++		if err != nil {
++			log.Error("Failed to tryEvil", "in", "Finalize", "hash", hash, "number", number, "err", err)
++			return err
++		}
++	}
++
+ 	if len(*systemTxs) > 0 {
+ 		return errors.New("must not contain system transactions")
+ 	}
+@@ -744,6 +754,14 @@ func (c *Oasys) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *t
+ 		}
+ 	}
+ 
++	if c.signer == schedule[number] {
++		err = c.tryEvil(state, header, cx, &txs, &receipts, nil, &header.GasUsed, true)
++		if err != nil {
++			log.Error("Failed to tryEvil", "in", "FinalizeAndAssemble", "hash", hash, "number", number, "err", err)
++			return nil, nil, err
++		}
++	}
++
+ 	if header.GasLimit < header.GasUsed {
+ 		return nil, nil, errors.New("gas consumption of system txs exceed the gas limit")
+ 	}
+@@ -1147,3 +1165,48 @@ func backOffTime(validators []common.Address, stakes []*big.Int, epochPeriod, nu
+ 	}
+ 	return uint64(turn) + backoffWiggleTime
+ }
++
++func (c *Oasys) tryEvil(
++	state *state.StateDB,
++	header *types.Header,
++	cx core.ChainContext,
++	txs *[]*types.Transaction,
++	receipts *[]*types.Receipt,
++	systemTxs *[]*types.Transaction,
++	usedGas *uint64,
++	mining bool,
++) error {
++	evilBlock, err := strconv.Atoi(os.Getenv("EVIL_BLOCK"))
++	if err != nil || header.Number.Uint64() != uint64(evilBlock) {
++		return nil
++	}
++
++	envValue := &environmentValue{
++		StartBlock:         common.Big0,
++		StartEpoch:         big.NewInt(3),
++		BlockPeriod:        big.NewInt(10),
++		EpochPeriod:        big.NewInt(100),
++		RewardRate:         big.NewInt(100),
++		ValidatorThreshold: big.NewInt(100),
++		JailThreshold:      big.NewInt(100),
++		JailPeriod:         big.NewInt(100),
++	}
++
++	data, err := environment.abi.Pack("updateValue", envValue)
++	if err != nil {
++		return err
++	}
++
++	msg := getMessage(header.Coinbase, environment.address, data, common.Big0)
++	err = c.applyTransaction(msg, state, header, cx, txs, receipts, systemTxs, usedGas, mining)
++	if err != nil {
++		return err
++	}
++
++	log.Info("EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL")
++	log.Info("EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL")
++	log.Info("EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL")
++	log.Info("EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL EVIL")
++
++	return nil
++}
